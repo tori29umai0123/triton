@@ -2,6 +2,10 @@
 #define PROTON_DRIVER_GPU_HIP_API_H_
 
 #include "Device.h"
+
+#ifndef _WIN32
+// HIP/ROCm is only supported on Linux
+
 #include "hip/hip_runtime_api.h"
 
 namespace proton {
@@ -75,5 +79,21 @@ template <bool CheckSuccess> hipError_t memFreeHost(void *p);
 } // namespace hip
 
 } // namespace proton
+
+#else // _WIN32
+
+// Stub declarations for Windows
+namespace proton {
+namespace hip {
+
+Device getDevice(uint64_t index);
+const std::string getHipArchName(uint64_t index);
+const char *getKernelNameRef(const void *f);
+const char *getKernelNameRefByPtr(const void *hostFunction, void *stream);
+
+} // namespace hip
+} // namespace proton
+
+#endif // _WIN32
 
 #endif // PROTON_DRIVER_GPU_HIP_API_H_

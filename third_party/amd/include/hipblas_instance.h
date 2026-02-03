@@ -2,6 +2,33 @@
 #define TRITON_HIPBLAS_INSTANCE_H
 
 #include "hipblas_types.h"
+
+#ifdef _WIN32
+// HIP/ROCm is not supported on Windows
+// This is a stub to allow compilation
+
+#include <stdexcept>
+#include <cstdint>
+
+class HipblasLtInstance {
+public:
+  HipblasLtInstance(uint64_t workspace, size_t workspaceSize) {
+    throw std::runtime_error("HIP/ROCm is not supported on Windows");
+  }
+  ~HipblasLtInstance() {}
+
+  void matmul(int m, int n, int k, uint64_t A, uint64_t B, uint64_t C,
+              hipDataType dtype, hipDataType out_dtype) {
+    throw std::runtime_error("HIP/ROCm is not supported on Windows");
+  }
+
+  void gemm(int m, int n, int k, uint64_t A, uint64_t B, uint64_t C, uint64_t D,
+            hipDataType dtype, hipDataType out_dtype, float alpha, float beta) {
+    throw std::runtime_error("HIP/ROCm is not supported on Windows");
+  }
+};
+
+#else // Linux/Unix
 #include <dlfcn.h>
 #include <sstream>
 #include <stdexcept>
@@ -294,4 +321,7 @@ public:
     gemm_impl(n, m, k, B, A, C, D, dtype, out_dtype, alpha, beta);
   }
 };
+
+#endif // _WIN32
+
 #endif // TRITON_HIPBLAS_INSTANCE_H

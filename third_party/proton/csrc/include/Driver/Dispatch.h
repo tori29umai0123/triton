@@ -1,11 +1,35 @@
 #ifndef PROTON_DRIVER_DISPATCH_H_
 #define PROTON_DRIVER_DISPATCH_H_
 
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <dlfcn.h>
+#endif
 
 #include "Utility/Env.h"
 #include <stdexcept>
 #include <string>
+
+#ifdef _WIN32
+// Windows implementations of dl* functions
+inline void *dlopen_win(const char *name, int flags) {
+  (void)flags;
+  return (void *)LoadLibraryA(name);
+}
+inline void *dlsym_win(void *handle, const char *symbol) {
+  return (void *)GetProcAddress((HMODULE)handle, symbol);
+}
+inline int dlclose_win(void *handle) {
+  return FreeLibrary((HMODULE)handle) ? 0 : -1;
+}
+#define dlopen(name, flags) dlopen_win(name, flags)
+#define dlsym(handle, symbol) dlsym_win(handle, symbol)
+#define dlclose(handle) dlclose_win(handle)
+#define RTLD_LAZY 0
+#define RTLD_LOCAL 0
+#define RTLD_NOLOAD 0
+#endif
 
 #define DISPATCH_ARGS_0()
 #define DISPATCH_ARGS_1(t1) t1 v1
@@ -152,12 +176,19 @@ public:
       }
     }
     if (ExternLib::lib != nullptr) {
+#ifdef _WIN32
+      char path[MAX_PATH];
+      if (GetModuleFileNameA((HMODULE)ExternLib::lib, path, MAX_PATH) > 0) {
+        return std::string(path);
+      }
+#else
       void *sym = dlsym(ExternLib::lib,
                         ExternLib::symbolName); // pick any known symbol
       Dl_info info;
       if (dladdr(sym, &info)) {
         return info.dli_fname;
       }
+#endif
     }
     return "";
   }

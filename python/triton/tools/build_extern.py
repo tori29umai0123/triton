@@ -1,5 +1,7 @@
 import argparse
+import re
 import subprocess
+import tempfile
 from abc import ABC, abstractmethod
 from typing import Dict, List, Optional
 
@@ -252,7 +254,9 @@ class Libdevice(ExternLibrary):
     def parse_symbols(self, input_file) -> None:
         if len(self.symbols) > 0:
             return
-        output = subprocess.check_output(["grep", "define", input_file]).decode().splitlines()
+        # Use Python regex instead of grep for cross-platform compatibility
+        with open(input_file, 'r', encoding='utf-8', errors='ignore') as f:
+            output = [line.strip() for line in f if 'define' in line]
         for line in output:
             symbol = self._extract_symbol(line)
             if symbol is None:
@@ -311,8 +315,9 @@ class LLVMDisassembler:
         Invoke llvm-dis to disassemble the given file.
         :param path: path to llvm-dis
         '''
+        import os
         self._path = path
-        self._ll_file = "/tmp/extern_lib.ll"
+        self._ll_file = os.path.join(tempfile.gettempdir(), "extern_lib.ll")
 
     def disasm(self, lib_path: str) -> None:
         subprocess.Popen([self._path, lib_path, "-o", self.ll_file], stdout=subprocess.PIPE).communicate()
@@ -359,7 +364,7 @@ if __name__ == "__main__":
     parser.add_argument("--llvm-dis", dest="llvm_dis_path", help="Path to llvm-dis", default="llvm-dis")
     parser.add_argument("--lib-path", dest="lib_path", help="Path to the extern library")
     parser.add_argument("--lib-name", dest="lib_name", help="Name of the extern library")
-    parser.add_argument("--output", dest="output_dir", help="Output file path", default="/tmp/")
+    parser.add_argument("--output", dest="output_dir", help="Output file path", default=tempfile.gettempdir())
     args = parser.parse_args()
 
     build(args.llvm_dis_path, args.lib_path, args.lib_name, args.output_dir)

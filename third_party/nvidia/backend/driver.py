@@ -10,10 +10,18 @@ from triton.runtime import _allocation
 from triton.backends.compiler import GPUTarget
 from triton.backends.driver import GPUDriver
 
+import platform
+
 dirname = os.path.dirname(os.path.realpath(__file__))
 include_dirs = [os.path.join(dirname, "include")]
 libdevice_dir = os.path.join(dirname, "lib")
-libraries = ['libcuda.so.1']
+# Windows uses nvcuda.dll, Linux uses libcuda.so.1
+if platform.system() == "Windows":
+    libraries = ['nvcuda']
+    libcuda_name = 'nvcuda.dll'
+else:
+    libraries = ['libcuda.so.1']
+    libcuda_name = 'libcuda.so.1'
 PyCUtensorMap = None
 PyKernelArg = None
 ARG_CONSTEXPR = None
@@ -25,6 +33,31 @@ ARG_TUPLE = None
 def libcuda_dirs():
     if env_libcuda_path := knobs.nvidia.libcuda_path:
         return [env_libcuda_path]
+
+    if platform.system() == "Windows":
+        # On Windows, nvcuda.dll is in system32 or CUDA installation
+        dirs = []
+        # Check system32 (where nvcuda.dll is typically installed by the driver)
+        system32 = os.path.join(os.environ.get('SystemRoot', r'C:\Windows'), 'System32')
+        if os.path.exists(os.path.join(system32, libcuda_name)):
+            dirs.append(system32)
+        # Check CUDA_PATH
+        cuda_path = os.environ.get('CUDA_PATH')
+        if cuda_path:
+            cuda_bin = os.path.join(cuda_path, 'bin')
+            if os.path.exists(os.path.join(cuda_bin, libcuda_name)):
+                dirs.append(cuda_bin)
+        # Check PATH
+        env_path = os.environ.get('PATH', '')
+        for p in env_path.split(';'):
+            if p and os.path.exists(os.path.join(p, libcuda_name)):
+                dirs.append(p)
+                break
+        if not dirs:
+            msg = f'{libcuda_name} cannot be found!\n'
+            msg += 'Please make sure NVIDIA GPU driver is installed.'
+            raise RuntimeError(msg)
+        return dirs
 
     libs = subprocess.check_output(["/sbin/ldconfig", "-p"]).decode(errors="ignore")
     # each line looks like the following:

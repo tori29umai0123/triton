@@ -1,4 +1,8 @@
 #include "Driver/GPU/HipApi.h"
+
+#ifndef _WIN32
+// HIP/ROCm is only supported on Linux
+
 #include "Driver/Dispatch.h"
 #include "hip/hip_runtime_api.h"
 #include <string>
@@ -127,3 +131,33 @@ const char *getKernelNameRefByPtr(const void *hostFunction,
 } // namespace hip
 
 } // namespace proton
+
+#else // _WIN32
+
+// Stub implementations for Windows where HIP is not supported
+#include <stdexcept>
+#include <string>
+
+namespace proton {
+namespace hip {
+
+Device getDevice(uint64_t index) {
+  throw std::runtime_error("HIP is not supported on Windows");
+}
+
+const std::string getHipArchName(uint64_t index) {
+  throw std::runtime_error("HIP is not supported on Windows");
+}
+
+const char *getKernelNameRef(const void *f) {
+  return nullptr;
+}
+
+const char *getKernelNameRefByPtr(const void *hostFunction, void *stream) {
+  return nullptr;
+}
+
+} // namespace hip
+} // namespace proton
+
+#endif // _WIN32

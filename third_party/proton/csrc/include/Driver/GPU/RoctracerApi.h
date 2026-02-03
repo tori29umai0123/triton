@@ -1,6 +1,9 @@
 #ifndef PROTON_DRIVER_GPU_ROCTRACER_API_H_
 #define PROTON_DRIVER_GPU_ROCTRACER_API_H_
 
+#ifndef _WIN32
+// Roctracer is only available on Linux (AMD ROCm)
+
 #include "Driver/Dispatch.h"
 #include "roctracer/roctracer.h"
 
@@ -91,5 +94,7 @@ activityPopExternalCorrelationId(activity_correlation_id_t *last_id);
 } // namespace roctracer
 
 } // namespace proton
+
+#endif // _WIN32
 
 #endif // PROTON_DRIVER_GPU_ROCTRACER_API_H_

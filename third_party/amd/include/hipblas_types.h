@@ -1,6 +1,30 @@
 #ifndef TRITON_HIPBLAS_TYPES_H
 #define TRITON_HIPBLAS_TYPES_H
 
+#ifdef _WIN32
+// HIP/ROCm is not supported on Windows - provide minimal stub definitions
+#include <cstddef>
+#include <cstdint>
+
+// Stub type definitions for Windows compilation
+typedef int hipDataType;
+typedef void* hipStream_t;
+typedef void* hipblasLtHandle_t;
+typedef void* hipblasLtMatmulDesc_t;
+typedef void* hipblasLtMatrixLayout_t;
+typedef void* hipblasLtMatmulPreference_t;
+
+// Stub enum values
+#define HIP_R_8F_E4M3 28
+#define HIP_R_8F_E5M2 29
+#define HIP_R_8F_E4M3_FNUZ 1000
+#define HIP_R_8F_E5M2_FNUZ 1001
+#define HIP_R_16F 2
+#define HIP_R_32F 0
+#define HIP_R_16BF 14
+
+#else // Linux/ROCm
+
 #include "../backend/include/hipblas-common/hipblas-common.h"
 #include <cstddef>
 #include <cstdint>
@@ -108,5 +132,7 @@ struct hipblasLtMatmulDescOpaque_t;
 typedef hipblasLtMatmulDescOpaque_t *hipblasLtMatmulDesc_t;
 struct hipStream_st;
 typedef struct hipStream_st *hipStream_t;
+
+#endif // _WIN32
 
 #endif // TRITON_HIPBLAS_TYPES_H

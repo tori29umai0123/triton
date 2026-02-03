@@ -17,6 +17,11 @@ from .cache import get_cache_manager
 from .. import knobs
 
 
+def _is_msvc(cc: str) -> bool:
+    """Check if the compiler is MSVC (cl.exe)."""
+    return cc is not None and (cc.endswith("cl.exe") or cc.endswith("cl"))
+
+
 def _build(name: str, src: str, srcdir: str, library_dirs: list[str], include_dirs: list[str], libraries: list[str],
            ccflags: list[str]) -> str:
     if impl := knobs.build.impl:
@@ -24,13 +29,26 @@ def _build(name: str, src: str, srcdir: str, library_dirs: list[str], include_di
     suffix = sysconfig.get_config_var('EXT_SUFFIX')
     so = os.path.join(srcdir, '{name}{suffix}'.format(name=name, suffix=suffix))
     cc = os.environ.get("CC")
+    is_windows = os.name == 'nt'
+
     if cc is None:
-        clang = shutil.which("clang")
-        gcc = shutil.which("gcc")
-        cc = gcc if gcc is not None else clang
-        if cc is None:
-            raise RuntimeError(
-                "Failed to find C compiler. Please specify via CC environment variable or set triton.knobs.build.impl.")
+        if is_windows:
+            # On Windows, prefer cl.exe (MSVC)
+            cl = shutil.which("cl")
+            clang = shutil.which("clang")
+            cc = cl if cl is not None else clang
+            if cc is None:
+                raise RuntimeError(
+                    "Failed to find C compiler. Please run from Visual Studio Developer Command Prompt "
+                    "or specify via CC environment variable or set triton.knobs.build.impl.")
+        else:
+            clang = shutil.which("clang")
+            gcc = shutil.which("gcc")
+            cc = gcc if gcc is not None else clang
+            if cc is None:
+                raise RuntimeError(
+                    "Failed to find C compiler. Please specify via CC environment variable or set triton.knobs.build.impl.")
+
     scheme = sysconfig.get_default_scheme()
     # 'posix_local' is a custom scheme on Debian. However, starting Python 3.10, the default install
     # path changes to include 'local'. This change is required to use triton with system-wide python.
@@ -39,11 +57,28 @@ def _build(name: str, src: str, srcdir: str, library_dirs: list[str], include_di
     py_include_dir = sysconfig.get_paths(scheme=scheme)["include"]
     custom_backend_dirs = knobs.build.backend_dirs
     include_dirs = include_dirs + [srcdir, py_include_dir, *custom_backend_dirs]
-    # for -Wno-psabi, see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=111047
-    cc_cmd = [cc, src, "-O3", "-shared", "-fPIC", "-Wno-psabi", "-o", so]
-    cc_cmd += [_library_flag(lib) for lib in libraries]
-    cc_cmd += [f"-L{dir}" for dir in library_dirs]
-    cc_cmd += [f"-I{dir}" for dir in include_dirs if dir is not None]
+
+    if _is_msvc(cc):
+        # MSVC compiler flags
+        cc_cmd = [cc, src, "/O2", "/LD", "/EHsc", "/nologo", f"/Fe{so}"]
+        cc_cmd += [f"/I{dir}" for dir in include_dirs if dir is not None]
+        cc_cmd += [f"/link"]
+        cc_cmd += [f"/LIBPATH:{dir}" for dir in library_dirs]
+        for lib in libraries:
+            # Convert library names for MSVC
+            if lib.endswith(".a"):
+                lib = lib[:-2] + ".lib"
+            elif not lib.endswith(".lib"):
+                lib = lib + ".lib"
+            cc_cmd.append(lib)
+    else:
+        # GCC/Clang compiler flags
+        # for -Wno-psabi, see https://gcc.gnu.org/bugzilla/show_bug.cgi?id=111047
+        cc_cmd = [cc, src, "-O3", "-shared", "-fPIC", "-Wno-psabi", "-o", so]
+        cc_cmd += [_library_flag(lib) for lib in libraries]
+        cc_cmd += [f"-L{dir}" for dir in library_dirs]
+        cc_cmd += [f"-I{dir}" for dir in include_dirs if dir is not None]
+
     cc_cmd.extend(ccflags)
     subprocess.check_call(cc_cmd, stdout=subprocess.DEVNULL)
     return so

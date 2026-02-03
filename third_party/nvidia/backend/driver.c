@@ -1,5 +1,9 @@
 #include "cuda.h"
+#ifdef _WIN32
+#include <windows.h>
+#else
 #include <dlfcn.h>
+#endif
 #include <stdalign.h>
 #include <stdbool.h>
 #include <stddef.h>
@@ -7,6 +11,37 @@
 #include <stdlib.h>
 #define PY_SSIZE_T_CLEAN
 #include <Python.h>
+
+#ifdef _WIN32
+// Windows implementations of dl* functions
+static void *dlopen_win(const char *name, int flags) {
+  (void)flags;
+  return (void *)LoadLibraryA(name);
+}
+static void *dlsym_win(void *handle, const char *symbol) {
+  return (void *)GetProcAddress((HMODULE)handle, symbol);
+}
+static int dlclose_win(void *handle) {
+  return FreeLibrary((HMODULE)handle) ? 0 : -1;
+}
+static char *dlerror_win(void) {
+  static char errbuf[256];
+  DWORD err = GetLastError();
+  if (err == 0) return NULL;
+  FormatMessageA(FORMAT_MESSAGE_FROM_SYSTEM, NULL, err, 0, errbuf, sizeof(errbuf), NULL);
+  return errbuf;
+}
+#define dlopen(name, flags) dlopen_win(name, flags)
+#define dlsym(handle, symbol) dlsym_win(handle, symbol)
+#define dlclose(handle) dlclose_win(handle)
+#define dlerror() dlerror_win()
+#define RTLD_LAZY 0
+#define RTLD_LOCAL 0
+#define RTLD_NOLOAD 0
+#define CUDA_LIB_NAME "nvcuda.dll"
+#else
+#define CUDA_LIB_NAME "libcuda.so.1"
+#endif
 
 typedef struct {
   PyObject_HEAD;
@@ -244,9 +279,9 @@ typedef CUresult (*cuLaunchKernelEx_t)(const CUlaunchConfig *config,
 #define defineGetFunctionHandle(name, symbolName)                              \
   static symbolName##_t name() {                                               \
     /* Open the shared library */                                              \
-    void *libHandle = dlopen("libcuda.so.1", RTLD_LAZY);                       \
+    void *libHandle = dlopen(CUDA_LIB_NAME, RTLD_LAZY);                        \
     if (!libHandle) {                                                          \
-      PyErr_SetString(PyExc_RuntimeError, "Failed to open libcuda.so.1");      \
+      PyErr_SetString(PyExc_RuntimeError, "Failed to open " CUDA_LIB_NAME);    \
       return NULL;                                                             \
     }                                                                          \
     /* Clear any existing error */                                             \
@@ -256,7 +291,7 @@ typedef CUresult (*cuLaunchKernelEx_t)(const CUlaunchConfig *config,
     const char *err = dlerror();                                               \
     if (err) {                                                                 \
       PyErr_SetString(PyExc_RuntimeError,                                      \
-                      "Failed to retrieve " #symbolName " from libcuda.so.1"); \
+                      "Failed to retrieve " #symbolName " from " CUDA_LIB_NAME); \
       dlclose(libHandle);                                                      \
       return NULL;                                                             \
     }                                                                          \
@@ -367,10 +402,18 @@ static PyObject *PyCUtensorMap_alloc(PyTypeObject *type, Py_ssize_t n_items) {
   void *mem = NULL;
   size_t size = type->tp_basicsize;
 
+#ifdef _WIN32
+  mem = _aligned_malloc(size, 128);
+  if (mem == NULL) {
+    PyErr_NoMemory();
+    return NULL;
+  }
+#else
   if (posix_memalign(&mem, 128, size) != 0) {
     PyErr_NoMemory();
     return NULL;
   }
+#endif
 
   self = (PyCUtensorMapObject *)mem;
   PyObject_INIT(self, type);
@@ -381,7 +424,13 @@ static void PyCUtensorMap_dealloc(PyObject *self) {
   Py_TYPE(self)->tp_free(self);
 }
 
-static void PyCUtensorMap_free(void *ptr) { free(ptr); }
+static void PyCUtensorMap_free(void *ptr) {
+#ifdef _WIN32
+  _aligned_free(ptr);
+#else
+  free(ptr);
+#endif
+}
 
 // clang-format off
 static PyTypeObject PyCUtensorMapType = {

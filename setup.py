@@ -197,11 +197,19 @@ def is_linux_os(id):
 def get_llvm_package_info():
     system = platform.system()
     try:
-        arch = {"x86_64": "x64", "arm64": "arm64", "aarch64": "arm64"}[platform.machine()]
+        arch = {"x86_64": "x64", "arm64": "arm64", "aarch64": "arm64", "AMD64": "x64"}[platform.machine()]
     except KeyError:
         arch = platform.machine()
     if (env_system_suffix := os.environ.get("TRITON_LLVM_SYSTEM_SUFFIX", None)):
         system_suffix = env_system_suffix
+    elif system == "Windows":
+        # Windows requires user to build LLVM from source or provide LLVM_SYSPATH
+        print(
+            f"LLVM pre-compiled image is not available for Windows. "
+            f"Please set LLVM_SYSPATH environment variable to your LLVM installation.",
+            file=sys.stderr
+        )
+        return Package("llvm", "LLVM-C.lib", "", "LLVM_INCLUDE_DIRS", "LLVM_LIBRARY_DIR", "LLVM_SYSPATH")
     elif system == "Darwin":
         system_suffix = f"macos-{arch}"
     elif system == "Linux":
@@ -269,14 +277,53 @@ def update_symlink(link_path, source_path):
     source_path = Path(source_path)
     link_path = Path(link_path)
 
-    if link_path.is_symlink():
-        link_path.unlink()
-    elif link_path.exists():
-        shutil.rmtree(link_path)
+    try:
+        if link_path.is_symlink():
+            link_path.unlink()
+        elif link_path.exists():
+            if link_path.is_dir():
+                shutil.rmtree(link_path)
+            else:
+                link_path.unlink()
+    except (OSError, PermissionError) as e:
+        print(f"Warning: Could not remove existing {link_path}: {e}", file=sys.stderr)
 
     print(f"creating symlink: {link_path} -> {source_path}", file=sys.stderr)
     link_path.absolute().parent.mkdir(parents=True, exist_ok=True)  # Ensure link's parent directory exists
-    link_path.symlink_to(source_path.absolute(), target_is_directory=True)
+
+    is_directory = source_path.is_dir()
+
+    # On Windows, try junction for directories, fall back to copy if symlink fails
+    if platform.system() == "Windows":
+        try:
+            # Try symlink first (requires admin or developer mode)
+            link_path.symlink_to(source_path.absolute(), target_is_directory=is_directory)
+        except OSError:
+            if is_directory:
+                try:
+                    # Try junction (directory only, no admin required)
+                    import subprocess
+                    # cmd /c mklink /J creates a junction point
+                    subprocess.run(
+                        ['cmd', '/c', 'mklink', '/J', str(link_path.absolute()), str(source_path.absolute())],
+                        check=True, capture_output=True
+                    )
+                except (subprocess.CalledProcessError, FileNotFoundError, OSError) as e:
+                    # Fall back to copying the directory
+                    print(f"Symlink/junction failed, copying: {source_path} -> {link_path}", file=sys.stderr)
+                    try:
+                        shutil.copytree(source_path, link_path, dirs_exist_ok=True)
+                    except (OSError, PermissionError) as e:
+                        print(f"Warning: Could not copy {source_path} to {link_path}: {e}", file=sys.stderr)
+            else:
+                # For files, just copy
+                print(f"Symlink failed, copying file: {source_path} -> {link_path}", file=sys.stderr)
+                try:
+                    shutil.copy2(source_path, link_path)
+                except (OSError, PermissionError) as e:
+                    print(f"Warning: Could not copy {source_path} to {link_path}: {e}", file=sys.stderr)
+    else:
+        link_path.symlink_to(source_path.absolute(), target_is_directory=is_directory)
 
 
 def get_thirdparty_packages(packages: list):
@@ -338,7 +385,12 @@ def download_and_copy(name, src_func, dst_path, variable, version, url_func):
     system = platform.system()
     arch = platform.machine()
     # NOTE: This might be wrong for jetson if both grace chips and jetson chips return aarch64
-    arch = {"arm64": "sbsa", "aarch64": "sbsa"}.get(arch, arch)
+    arch = {"arm64": "sbsa", "aarch64": "sbsa", "AMD64": "x86_64"}.get(arch, arch)
+    # On Windows, skip downloading NVIDIA tools - user should set paths via environment variables
+    # or use local CUDA installation
+    if system == "Windows":
+        print(f"Skipping download of {name} on Windows. Set {variable} environment variable if needed.", file=sys.stderr)
+        return
     supported = {"Linux": "linux", "Darwin": "linux"}
     url = url_func(supported[system], arch, version)
     src_path = src_func(supported[system], arch, version)
@@ -434,8 +486,25 @@ class CMakeBuild(build_ext):
         cmake_args += self.get_pybind11_cmake_args()
         cupti_include_dir = get_env_with_keys(["TRITON_CUPTI_INCLUDE_PATH"])
         if cupti_include_dir == "":
-            cupti_include_dir = os.path.join(get_base_dir(), "third_party", "nvidia", "backend", "include")
+            if platform.system() == "Windows":
+                # On Windows, CUPTI is in CUDA Toolkit extras directory
+                cuda_path = os.environ.get("CUDA_PATH", "")
+                if cuda_path:
+                    cupti_include_dir = os.path.join(cuda_path, "extras", "CUPTI", "include")
+                else:
+                    cupti_include_dir = os.path.join(get_base_dir(), "third_party", "nvidia", "backend", "include")
+            else:
+                cupti_include_dir = os.path.join(get_base_dir(), "third_party", "nvidia", "backend", "include")
         cmake_args += ["-DCUPTI_INCLUDE_DIR=" + cupti_include_dir]
+        # On Windows, also need to pass CUDA include directory for cuda.h
+        if platform.system() == "Windows":
+            cuda_include_dir = get_env_with_keys(["TRITON_CUDA_INCLUDE_PATH"])
+            if cuda_include_dir == "":
+                cuda_path = os.environ.get("CUDA_PATH", "")
+                if cuda_path:
+                    cuda_include_dir = os.path.join(cuda_path, "include")
+            if cuda_include_dir:
+                cmake_args += ["-DCUDA_INCLUDE_DIR=" + cuda_include_dir]
         roctracer_include_dir = get_env_with_keys(["TRITON_ROCTRACER_INCLUDE_PATH"])
         if roctracer_include_dir == "":
             roctracer_include_dir = os.path.join(get_base_dir(), "third_party", "amd", "backend", "include")
@@ -478,6 +547,9 @@ class CMakeBuild(build_ext):
         cmake_args += [f"-DCMAKE_BUILD_TYPE={cfg}"]
         if platform.system() == "Windows":
             cmake_args += [f"-DCMAKE_RUNTIME_OUTPUT_DIRECTORY_{cfg.upper()}={extdir}"]
+            # Windows with Ninja also supports parallel builds
+            max_jobs = os.getenv("MAX_JOBS", str(os.cpu_count() or 1))
+            build_args += ['-j', max_jobs]
         else:
             max_jobs = os.getenv("MAX_JOBS", str(2 * os.cpu_count()))
             build_args += ['-j' + max_jobs]

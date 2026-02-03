@@ -57,12 +57,19 @@ if(NOT MSVC)
   set(CMAKE_C_FLAGS_TRITONBUILDWITHO1 "-O1")
   set(CMAKE_CXX_FLAGS_TRITONBUILDWITHO1 "-O1")
 else()
-  set(CMAKE_C_FLAGS_TRITONRELBUILDWITHASSERTS "/Zi /RTC1 /bigobj /Zc:preprocessor /permissive-")
-  set(CMAKE_CXX_FLAGS_TRITONRELBUILDWITHASSERTS "/Zi /RTC1 /bigobj /Zc:preprocessor /permissive-")
+  set(CMAKE_C_FLAGS_TRITONRELBUILDWITHASSERTS "/O2 /Zi /bigobj /Zc:preprocessor /permissive- /EHsc /utf-8")
+  set(CMAKE_CXX_FLAGS_TRITONRELBUILDWITHASSERTS "/O2 /Zi /bigobj /Zc:preprocessor /permissive- /EHsc /utf-8")
+  set(CMAKE_C_FLAGS_TRITONBUILDWITHO1 "/O1 /bigobj /Zc:preprocessor /permissive- /EHsc /utf-8")
+  set(CMAKE_CXX_FLAGS_TRITONBUILDWITHO1 "/O1 /bigobj /Zc:preprocessor /permissive- /EHsc /utf-8")
   set(CMAKE_EXE_LINKER_FLAGS_TRITONRELBUILDWITHASSERTS "/debug:fastlink /INCREMENTAL")
   set(CMAKE_MODULE_LINKER_FLAGS_TRITONRELBUILDWITHASSERTS "/debug:fastlink /INCREMENTAL")
   set(CMAKE_SHARED_LINKER_FLAGS_TRITONRELBUILDWITHASSERTS "/debug:fastlink /INCREMENTAL")
   set(LLVM_BUILD_SHARED_LIBS "0")
+  # Disable some MSVC warnings that are common in LLVM/MLIR code
+  # /utf-8: Treat source files as UTF-8 (required for pybind11 unicode characters)
+  # NOMINMAX: Prevent Windows.h from defining min/max macros that conflict with std::min/max
+  add_compile_options(/wd4267 /wd4244 /wd4146 /wd4245 /wd4996 /utf-8)
+  add_compile_definitions(NOMINMAX WIN32_LEAN_AND_MEAN)
 endif()
 
 # Default build type
@@ -310,10 +317,26 @@ if(TRITON_BUILD_PYTHON_MODULE)
       message(FATAL_ERROR "TRITON_WHEEL_DIR must be set.")
   endif()
 
-  configure_file(
-    "${LLVM_SYSPATH}/bin/FileCheck"
-    "${TRITON_WHEEL_DIR}/FileCheck"
-    COPYONLY)
+  # Copy FileCheck if it exists (it's a test utility, may not be built)
+  if(WIN32)
+    if(EXISTS "${LLVM_SYSPATH}/bin/FileCheck.exe")
+      configure_file(
+        "${LLVM_SYSPATH}/bin/FileCheck.exe"
+        "${TRITON_WHEEL_DIR}/FileCheck.exe"
+        COPYONLY)
+    else()
+      message(WARNING "FileCheck.exe not found in LLVM installation. Lit tests may not work.")
+    endif()
+  else()
+    if(EXISTS "${LLVM_SYSPATH}/bin/FileCheck")
+      configure_file(
+        "${LLVM_SYSPATH}/bin/FileCheck"
+        "${TRITON_WHEEL_DIR}/FileCheck"
+        COPYONLY)
+    else()
+      message(WARNING "FileCheck not found in LLVM installation. Lit tests may not work.")
+    endif()
+  endif()
 
 endif()
 

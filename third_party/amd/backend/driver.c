@@ -1,3 +1,42 @@
+#ifdef _WIN32
+// HIP/ROCm is not supported on Windows
+// Provide a stub module that raises an error when loaded
+
+#define PY_SSIZE_T_CLEAN
+#include <Python.h>
+
+static PyObject *stub_error(PyObject *self, PyObject *args) {
+  PyErr_SetString(PyExc_RuntimeError, "HIP/ROCm is not supported on Windows");
+  return NULL;
+}
+
+static PyMethodDef ModuleMethods[] = {
+    {"load_binary", stub_error, METH_VARARGS, "Not supported on Windows"},
+    {"get_device_properties", stub_error, METH_VARARGS, "Not supported on Windows"},
+    {"create_tdm_descriptor", stub_error, METH_VARARGS, "Not supported on Windows"},
+    {"build_signature_metadata", stub_error, METH_VARARGS, "Not supported on Windows"},
+    {"launch", stub_error, METH_VARARGS, "Not supported on Windows"},
+    {NULL, NULL, 0, NULL}
+};
+
+static struct PyModuleDef ModuleDef = {
+    PyModuleDef_HEAD_INIT,
+    "hip_utils",
+    "HIP/ROCm is not supported on Windows",
+    -1,
+    ModuleMethods
+};
+
+PyMODINIT_FUNC PyInit_hip_utils(void) {
+  PyObject *m = PyModule_Create(&ModuleDef);
+  if (m == NULL) {
+    return NULL;
+  }
+  return m;
+}
+
+#else // !_WIN32
+
 #define __HIP_PLATFORM_AMD__
 #include <hip/hip_runtime.h>
 #include <hip/hip_runtime_api.h>
@@ -1140,3 +1179,5 @@ PyMODINIT_FUNC PyInit_hip_utils(void) {
 
   return m;
 }
+
+#endif // !_WIN32

@@ -2,6 +2,10 @@
 #define PROTON_DRIVER_GPU_HSA_API_H_
 
 #include "Device.h"
+
+#ifndef _WIN32
+// HSA is only supported on Linux (AMD ROCm)
+
 #include "hsa/hsa_ext_amd.h"
 
 namespace proton {
@@ -19,5 +23,7 @@ hsa_status_t iterateAgents(hsa_status_t (*callback)(hsa_agent_t agent,
 } // namespace hsa
 
 } // namespace proton
+
+#endif // _WIN32
 
 #endif // PROTON_DRIVER_GPU_HSA_API_H_

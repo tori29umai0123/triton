@@ -13,6 +13,13 @@ endif()
 if(NOT JSON_INCLUDE_DIR)
   message(FATAL_ERROR "JSON include directory not defined")
 endif()
+# On Windows, CUDA headers may be in a separate directory from CUPTI
+if(WIN32 AND NOT CUDA_INCLUDE_DIR)
+  # Try to find CUDA include from CUDA_PATH environment variable
+  if(DEFINED ENV{CUDA_PATH})
+    set(CUDA_INCLUDE_DIR "$ENV{CUDA_PATH}/include")
+  endif()
+endif()
 
 # ============ Dependencies =============
 find_package(Python3 REQUIRED Interpreter Development.Module)
@@ -40,6 +47,11 @@ function(add_proton_library name)
       "${PROTON_COMMON_DIR}/include"
       "${PROTON_SRC_DIR}/include"
   )
+
+  # On Windows, add CUDA include directory separately (contains cuda.h)
+  if(WIN32 AND CUDA_INCLUDE_DIR)
+    target_include_directories(${name} PRIVATE "${CUDA_INCLUDE_DIR}")
+  endif()
 
   # If HIP is AMD-based
   target_compile_definitions(${name} PRIVATE __HIP_PLATFORM_AMD__)

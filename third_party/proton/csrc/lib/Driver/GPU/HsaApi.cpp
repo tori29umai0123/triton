@@ -1,4 +1,8 @@
 #include "Driver/GPU/HsaApi.h"
+
+#ifndef _WIN32
+// HSA is only supported on Linux (AMD ROCm)
+
 #include "Driver/Dispatch.h"
 
 namespace proton {
@@ -34,3 +38,5 @@ hsa_status_t iterateAgents(hsa_status_t (*callback)(hsa_agent_t agent,
 } // namespace hsa
 
 } // namespace proton
+
+#endif // _WIN32

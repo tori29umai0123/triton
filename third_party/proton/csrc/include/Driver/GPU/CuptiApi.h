@@ -12,7 +12,13 @@ namespace cupti {
 
 struct ExternLibCupti : public ExternLibBase {
   using RetType = CUptiResult;
+#ifdef _WIN32
+  // On Windows, CUPTI DLL name includes version (e.g., cupti64_2025.1.0.dll for CUDA 12.8)
+  // Users should set TRITON_CUPTI_LIB_PATH to the full path if auto-detection fails
+  static constexpr const char *name = "cupti64_2025.1.0.dll";
+#else
   static constexpr const char *name = "libcupti.so";
+#endif
   static constexpr const char *symbolName = "cuptiUnsubscribe";
   static constexpr const char *pathEnv = "TRITON_CUPTI_LIB_PATH";
   static constexpr RetType success = CUPTI_SUCCESS;

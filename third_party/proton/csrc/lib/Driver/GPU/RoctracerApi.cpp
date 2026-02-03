@@ -1,4 +1,8 @@
 #include "Driver/GPU/RoctracerApi.h"
+
+#ifndef _WIN32
+// Roctracer is only available on Linux (AMD ROCm)
+
 #include "Driver/Dispatch.h"
 
 namespace proton {
@@ -93,3 +97,5 @@ DEFINE_DISPATCH(ExternLibRoctracer, getNextRecord, roctracer_next_record,
 } // namespace roctracer
 
 } // namespace proton
+
+#endif // _WIN32

@@ -85,18 +85,24 @@ def compute_roofline(*args, \
 
 
 def get_memset_tbps():
+    import platform
     n_bytes = 1 << 32
     buf = torch.empty(n_bytes, device="cuda", dtype=torch.uint8)
     stream0 = ctypes.c_void_p(0)
 
     if is_cuda():
-        libname = "libcuda.so"
+        if platform.system() == "Windows":
+            libname = "nvcuda.dll"
+        else:
+            libname = "libcuda.so"
         init_name = "cuInit"
         memset_name = "cuMemsetD8Async"
         memset_argtypes = [ctypes.c_uint64, ctypes.c_ubyte, ctypes.c_size_t, ctypes.c_void_p]
         dptr = ctypes.c_uint64(buf.data_ptr())
         value = ctypes.c_ubyte(0)
     elif is_hip():
+        if platform.system() == "Windows":
+            raise RuntimeError("HIP/ROCm is not supported on Windows")
         libname = "libamdhip64.so"
         init_name = "hipInit"
         memset_name = "hipMemsetAsync"

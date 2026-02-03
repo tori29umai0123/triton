@@ -1,4 +1,8 @@
 #include "Profiler/Roctracer/RoctracerProfiler.h"
+
+#ifndef _WIN32
+// Roctracer is only available on Linux (AMD ROCm)
+
 #include "Context/Context.h"
 #include "Data/Metric.h"
 #include "Driver/GPU/HipApi.h"
@@ -450,3 +454,5 @@ void RoctracerProfiler::doSetMode(
 }
 
 } // namespace proton
+
+#endif // _WIN32

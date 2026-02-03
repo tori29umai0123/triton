@@ -1,5 +1,6 @@
 import functools
 import os
+import platform
 import subprocess
 import re
 import triton
@@ -9,6 +10,9 @@ from triton.backends.compiler import GPUTarget
 from triton.backends.driver import GPUDriver
 from triton.runtime import _allocation
 from triton.runtime.build import compile_module_from_src
+
+# HIP/ROCm is not supported on Windows
+_IS_WINDOWS = platform.system() == "Windows"
 
 dirname = os.path.dirname(os.path.realpath(__file__))
 include_dirs = [os.path.join(dirname, "include")]
@@ -442,6 +446,9 @@ class HIPDriver(GPUDriver):
 
     @staticmethod
     def is_active():
+        # HIP/ROCm is not supported on Windows
+        if _IS_WINDOWS:
+            return False
         try:
             import torch
             return torch.cuda.is_available() and (torch.version.hip is not None)

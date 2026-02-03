@@ -233,6 +233,9 @@ static void checkMatmulConstraints(const std::string &A_dtype,
   }
 }
 
+#ifndef _WIN32
+// HIP-specific code - not available on Windows
+
 struct HipBlasInit {
   int m;
   int n;
@@ -312,6 +315,8 @@ static HipBlasInit initialize_hipblas_op(py::object &A, py::object &B,
 
   return HipBlasInit{m, n, k, dtype, out_dtype};
 }
+
+#endif // _WIN32 (HIP-specific code)
 
 static std::optional<std::string> lldInvoke(const char *inPath,
                                             const char *outPath) {
@@ -546,6 +551,8 @@ void init_triton_amd(py::module &&m) {
     mlir::triton::AMD::runScalarizePackedFOpsPass(*fn);
   });
 
+#ifndef _WIN32
+  // HIP BLAS bindings - not available on Windows
   auto hipBlas = m.def_submodule("hipblas");
   py::class_<HipblasLtInstance>(hipBlas, "HipblasLt")
       .def(py::init<>([&](py::object &workspace) {
@@ -574,4 +581,5 @@ void init_triton_amd(py::module &&m) {
         self.gemm(init.m, init.n, init.k, A_ptr, B_ptr, C_ptr, D_ptr,
                   init.dtype, init.out_dtype, alpha, beta);
       });
+#endif // _WIN32
 }

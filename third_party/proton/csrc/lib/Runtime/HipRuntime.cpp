@@ -1,5 +1,8 @@
 #include "Runtime/HipRuntime.h"
 
+#ifndef _WIN32
+// HIP/ROCm is only supported on Linux
+
 #include "Driver/GPU/HipApi.h"
 #include <algorithm>
 #include <cstdint>
@@ -111,3 +114,81 @@ void HipRuntime::processHostBuffer(
   }
 }
 } // namespace proton
+
+#else // _WIN32
+
+// Stub implementations for Windows where HIP is not supported
+#include <stdexcept>
+
+namespace proton {
+
+void HipRuntime::launchKernel(void *kernel, unsigned int gridDimX,
+                              unsigned int gridDimY, unsigned int gridDimZ,
+                              unsigned int blockDimX, unsigned int blockDimY,
+                              unsigned int blockDimZ,
+                              unsigned int sharedMemBytes, void *stream,
+                              void **kernelParams, void **extra) {
+  throw std::runtime_error("HIP is not supported on Windows");
+}
+
+void HipRuntime::memset(void *devicePtr, uint32_t value, size_t size,
+                        void *stream) {
+  throw std::runtime_error("HIP is not supported on Windows");
+}
+
+void HipRuntime::allocateHostBuffer(uint8_t **buffer, size_t size,
+                                    bool mapped) {
+  throw std::runtime_error("HIP is not supported on Windows");
+}
+
+void HipRuntime::getHostDevicePointer(uint8_t *hostPtr, uint8_t **devicePtr) {
+  throw std::runtime_error("HIP is not supported on Windows");
+}
+
+void HipRuntime::freeHostBuffer(uint8_t *buffer) {
+  throw std::runtime_error("HIP is not supported on Windows");
+}
+
+void HipRuntime::allocateDeviceBuffer(uint8_t **buffer, size_t size) {
+  throw std::runtime_error("HIP is not supported on Windows");
+}
+
+void HipRuntime::freeDeviceBuffer(uint8_t *buffer) {
+  throw std::runtime_error("HIP is not supported on Windows");
+}
+
+void HipRuntime::copyDeviceToHostAsync(void *dst, const void *src, size_t size,
+                                       void *stream) {
+  throw std::runtime_error("HIP is not supported on Windows");
+}
+
+void *HipRuntime::getDevice() {
+  throw std::runtime_error("HIP is not supported on Windows");
+}
+
+void *HipRuntime::getPriorityStream() {
+  throw std::runtime_error("HIP is not supported on Windows");
+}
+
+void HipRuntime::synchronizeStream(void *stream) {
+  throw std::runtime_error("HIP is not supported on Windows");
+}
+
+void HipRuntime::synchronizeDevice() {
+  throw std::runtime_error("HIP is not supported on Windows");
+}
+
+void HipRuntime::destroyStream(void *stream) {
+  throw std::runtime_error("HIP is not supported on Windows");
+}
+
+void HipRuntime::processHostBuffer(
+    uint8_t *hostBuffer, size_t hostBufferSize, uint8_t *deviceBuffer,
+    size_t deviceBufferSize, void *stream,
+    std::function<void(uint8_t *, size_t)> callback) {
+  throw std::runtime_error("HIP is not supported on Windows");
+}
+
+} // namespace proton
+
+#endif // _WIN32

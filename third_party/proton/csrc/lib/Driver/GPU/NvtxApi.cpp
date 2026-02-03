@@ -4,6 +4,10 @@
 #include <cstdint>
 #include <cstdlib>
 
+#ifdef _WIN32
+#include <windows.h>
+#endif
+
 namespace proton {
 
 namespace {
@@ -22,11 +26,21 @@ void enable() {
   const std::string cuptiLibPath =
       Dispatch<cupti::ExternLibCupti>::getLibPath();
   if (!cuptiLibPath.empty()) {
+#ifdef _WIN32
+    SetEnvironmentVariableA("NVTX_INJECTION64_PATH", cuptiLibPath.c_str());
+#else
     setenv("NVTX_INJECTION64_PATH", cuptiLibPath.c_str(), 1);
+#endif
   }
 }
 
-void disable() { unsetenv("NVTX_INJECTION64_PATH"); }
+void disable() {
+#ifdef _WIN32
+  SetEnvironmentVariableA("NVTX_INJECTION64_PATH", NULL);
+#else
+  unsetenv("NVTX_INJECTION64_PATH");
+#endif
+}
 
 std::string getMessageFromRangePushA(const void *params) {
   if (const auto *p = static_cast<const RangePushAParams *>(params))
